@@ -370,13 +370,8 @@ class SiswaController extends Controller
         $q = $request->input('q');
         $tahunAjaranId = $kelas_ajar->tahun_ajaran_id;
 
-        // Cari siswa yang pernah punya riwayat kelas di tahun ajaran sebelumnya, tapi belum ada di kelas_ajar ini
+        // Cari siswa yang belum ada di kelas_ajar ini
         $siswaQuery = Siswa::query()
-            ->whereHas('riwayatKelas', function ($q1) use ($tahunAjaranId) {
-                $q1->whereHas('kelasAjar', function ($q2) use ($tahunAjaranId) {
-                    $q2->where('tahun_ajaran_id', '<', $tahunAjaranId);
-                });
-            })
             ->whereDoesntHave('riwayatKelas', function ($q3) use ($kelas_ajar) {
                 $q3->where('kelas_ajar_id', $kelas_ajar->kelas_ajar_id);
             })
@@ -480,15 +475,115 @@ class SiswaController extends Controller
         return back()->with('success', 'Siswa berhasil dimasukkan ke kelas.');
     }
 
+    public function pindahkanSiswa(Request $request, KelasAjar $kelas_ajar, Siswa $siswa)
+    {
+        $validated = $request->validate([
+            'tujuan_kelas_ajar_id' => 'required|exists:kelas_ajar,kelas_ajar_id',
+        ]);
+
+        try {
+            DB::transaction(function () use ($validated, $kelas_ajar, $siswa) {
+                $riwayatAsal = RiwayatKelas::where('kelas_ajar_id', $kelas_ajar->kelas_ajar_id)
+                    ->where('siswa_id', $siswa->siswa_id)
+                    ->first();
+
+                if (!$riwayatAsal) {
+                    throw ValidationException::withMessages([
+                        'tujuan_kelas_ajar_id' => 'Siswa tidak terdaftar di kelas ini.',
+                    ]);
+                }
+
+                $kelasTujuan = KelasAjar::with('tahunAjaran')->findOrFail($validated['tujuan_kelas_ajar_id']);
+                if ($kelasTujuan->kelas_ajar_id === $kelas_ajar->kelas_ajar_id) {
+                    throw ValidationException::withMessages([
+                        'tujuan_kelas_ajar_id' => 'Kelas tujuan harus berbeda dari kelas saat ini.',
+                    ]);
+                }
+
+                $sudahAdaDiKelasTujuan = RiwayatKelas::where('kelas_ajar_id', $kelasTujuan->kelas_ajar_id)
+                    ->where('siswa_id', $siswa->siswa_id)
+                    ->exists();
+                if ($sudahAdaDiKelasTujuan) {
+                    throw ValidationException::withMessages([
+                        'tujuan_kelas_ajar_id' => 'Siswa sudah terdaftar di kelas tujuan.',
+                    ]);
+                }
+
+                $tahunAsal = (int) explode('/', $kelas_ajar->load('tahunAjaran')->tahunAjaran->tahun)[0];
+                $tahunTujuan = (int) explode('/', $kelasTujuan->tahunAjaran->tahun)[0];
+                $semesterMap = ['Ganjil' => 1, 'Genap' => 2];
+                $semAsal = $semesterMap[$kelas_ajar->tahunAjaran->semester] ?? 0;
+                $semTujuan = $semesterMap[$kelasTujuan->tahunAjaran->semester] ?? 0;
+
+                if ($tahunTujuan < $tahunAsal || ($tahunTujuan === $tahunAsal && $semTujuan <= $semAsal)) {
+                    throw ValidationException::withMessages([
+                        'tujuan_kelas_ajar_id' => 'Tidak bisa memindahkan ke tahun ajaran/semester yang sama atau lebih rendah.',
+                    ]);
+                }
+
+                $riwayatAsal->update(['kelas_ajar_id' => $kelasTujuan->kelas_ajar_id]);
+            });
+
+            return redirect()->route('akademik.siswa.index', $kelas_ajar->kelas_ajar_id)
+                ->with('success', 'Siswa berhasil dipindahkan ke kelas tujuan.');
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return back()->withInput()->withErrors([
+                'tujuan_kelas_ajar_id' => 'Terjadi kesalahan. Gagal memindahkan siswa.',
+            ]);
+        }
+    }
+
     public function ajaxSearchKelas(Request $request)
     {
         $q = $request->input('q');
-        $kelasAjar = KelasAjar::with(['kelas', 'tahunAjaran'])
-            ->whereHas('kelas', function ($query) use ($q) {
-                if ($q) $query->where('nama_kelas', 'like', "%$q%");
-            })
-            ->orWhereHas('tahunAjaran', function ($query) use ($q) {
-                if ($q) $query->where('tahun', 'like', "%$q%")->orWhere('semester', 'like', "%$q%");
+        $showOtherSemester = $request->input('show_other_semester') === 'true';
+        $showOtherTahun = $request->input('show_other_tahun') === 'true';
+        $kelasAjarId = $request->input('kelas_ajar_id');
+
+        $query = KelasAjar::with(['kelas', 'tahunAjaran'])->withCount('riwayatKelas');
+
+        if ($kelasAjarId) {
+            $kelasTujuan = KelasAjar::with('tahunAjaran')->find($kelasAjarId);
+            if ($kelasTujuan && $kelasTujuan->tahunAjaran) {
+                $tahun = $kelasTujuan->tahunAjaran->tahun;
+                $semester = $kelasTujuan->tahunAjaran->semester;
+
+                // Target default untuk load siswa (mengambil dari kelas sebelumnya)
+                $targetTahun = $tahun;
+                $targetSemester = $semester === 'Ganjil' ? 'Genap' : 'Ganjil';
+                
+                if ($semester === 'Ganjil') {
+                    // Jika saat ini ganjil, maka default-nya adalah genap tahun sebelumnya
+                    $parts = explode('/', $tahun);
+                    if (count($parts) == 2) {
+                        $targetTahun = ((int)$parts[0] - 1) . '/' . ((int)$parts[1] - 1);
+                    }
+                }
+
+                if (!$showOtherTahun) {
+                    $query->whereHas('tahunAjaran', function($q2) use ($targetTahun) {
+                        $q2->where('tahun', $targetTahun);
+                    });
+                }
+                
+                if (!$showOtherSemester) {
+                    $query->whereHas('tahunAjaran', function($q2) use ($targetSemester) {
+                        $q2->where('semester', $targetSemester);
+                    });
+                }
+            }
+        }
+
+        $kelasAjar = $query->where(function($subQuery) use ($q) {
+                if ($q) {
+                    $subQuery->whereHas('kelas', function ($q2) use ($q) {
+                        $q2->where('nama_kelas', 'like', "%$q%");
+                    })->orWhereHas('tahunAjaran', function ($q3) use ($q) {
+                        $q3->where('tahun', 'like', "%$q%")->orWhere('semester', 'like', "%$q%");
+                    });
+                }
             })
             ->limit(20)
             ->get();
@@ -496,7 +591,7 @@ class SiswaController extends Controller
         $results = $kelasAjar->map(function ($ka) {
             return [
                 'id' => $ka->kelas_ajar_id,
-                'text' => "{$ka->kelas->nama_kelas} - {$ka->tahunAjaran->tahun} {$ka->tahunAjaran->semester}"
+                'text' => "{$ka->kelas->nama_kelas} - {$ka->tahunAjaran->tahun} {$ka->tahunAjaran->semester} ({$ka->riwayat_kelas_count} Siswa)"
             ];
         });
 

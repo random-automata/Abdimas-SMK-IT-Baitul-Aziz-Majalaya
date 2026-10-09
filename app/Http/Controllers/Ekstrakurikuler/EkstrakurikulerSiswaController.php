@@ -134,8 +134,8 @@ class EkstrakurikulerSiswaController extends Controller
 
                 // Tambahkan ke pivot ekskul
                 SiswaEkstrakurikuler::create([
+                    'siswa_id' => $siswa->siswa_id,
                     'ekstrakurikuler_id' => $ekskul->ekstrakurikuler_id,
-                    'riwayat_kelas_id' => $riwayatKelas->riwayat_kelas_id,
                 ]);
             });
 
@@ -167,7 +167,6 @@ class EkstrakurikulerSiswaController extends Controller
 
         $siswaQuery = Siswa::query()
             ->whereHas('user')
-            ->whereHas('riwayatKelas') // hanya siswa yang sudah pernah masuk kelas
             ->where(function ($query) use ($q) {
                 $query->where('nama', 'like', "%$q%")
                     ->orWhere('nis', 'like', "%$q%")
@@ -218,5 +217,117 @@ class EkstrakurikulerSiswaController extends Controller
         ]);
 
         return back()->with('success', 'Siswa berhasil dimasukkan ke ekskul.');
+    }
+
+    public function showLoadSiswaForm($ekstrakurikuler_id, Request $request)
+    {
+        $ekskul = Ekstrakurikuler::with(['tahunAjaran'])->findOrFail($ekstrakurikuler_id);
+        $kelasAsalId = $request->input('kelas_asal_id');
+        $siswaList = [];
+        $kelasAsal = null;
+
+        if ($kelasAsalId) {
+            $riwayat = RiwayatKelas::where('kelas_ajar_id', $kelasAsalId)
+                ->with(['siswa.user'])
+                ->get();
+            
+            $sudahAdaIds = SiswaEkstrakurikuler::where('ekstrakurikuler_id', $ekstrakurikuler_id)
+                ->pluck('siswa_id')->toArray();
+            
+            $siswaList = $riwayat->map(function ($r) {
+                return $r->siswa;
+            })->filter(function($siswa) use ($sudahAdaIds) {
+                return !in_array($siswa->siswa_id, $sudahAdaIds);
+            });
+
+            $kelasAsal = KelasAjar::query()->with(['kelas', 'tahunAjaran'])->find($kelasAsalId);
+        }
+
+        return view('ekstrakurikuler.load_siswa', compact('ekskul', 'kelasAsalId', 'siswaList', 'kelasAsal'));
+    }
+
+    public function loadSiswaFromKelas(Request $request, $ekstrakurikuler_id)
+    {
+        $request->validate([
+            'kelas_asal_id' => 'required|exists:kelas_ajar,kelas_ajar_id',
+            'siswa_ids' => 'required|array',
+            'siswa_ids.*' => 'exists:siswa,siswa_id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+            $ekskul = Ekstrakurikuler::findOrFail($ekstrakurikuler_id);
+            $count = 0;
+            
+            foreach ($request->siswa_ids as $siswaId) {
+                $exists = SiswaEkstrakurikuler::where('ekstrakurikuler_id', $ekskul->ekstrakurikuler_id)
+                    ->where('siswa_id', $siswaId)
+                    ->exists();
+
+                if (!$exists) {
+                    SiswaEkstrakurikuler::create([
+                        'siswa_id' => $siswaId,
+                        'ekstrakurikuler_id' => $ekskul->ekstrakurikuler_id,
+                    ]);
+                    $count++;
+                }
+            }
+
+            DB::commit();
+            
+            if ($count <= 0) {
+                return redirect()->route('ekstrakurikuler.manage-siswa.index', $ekstrakurikuler_id)
+                    ->with('warning', 'Tidak ada siswa yang ditambahkan. Mungkin siswa sudah terdaftar di ekstrakurikuler ini.');
+            }
+
+            return redirect()->route('ekstrakurikuler.manage-siswa.index', $ekstrakurikuler_id)
+                ->with('success', "$count siswa berhasil dimasukkan ke ekstrakurikuler.");
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->withInput()->withErrors(['error' => 'Terjadi kesalahan. Gagal memuat data siswa']);
+        }
+    }
+
+    public function ajaxSearchKelas(Request $request, $ekstrakurikuler_id)
+    {
+        $q = $request->input('q');
+        $showOtherSemester = $request->input('show_other_semester') === 'true';
+        $showOtherTahun = $request->input('show_other_tahun') === 'true';
+        $ekskul = Ekstrakurikuler::with('tahunAjaran')->findOrFail($ekstrakurikuler_id);
+        
+        $tahun = $ekskul->tahunAjaran->tahun;
+        $semester = $ekskul->tahunAjaran->semester;
+
+        $kelasAjar = KelasAjar::with(['kelas', 'tahunAjaran'])->withCount('riwayatKelas')
+            ->when(!$showOtherTahun, function($query) use ($tahun) {
+                $query->whereHas('tahunAjaran', function($q2) use ($tahun) {
+                    $q2->where('tahun', $tahun);
+                });
+            })
+            ->when(!$showOtherSemester, function($query) use ($semester) {
+                $query->whereHas('tahunAjaran', function($q2) use ($semester) {
+                    $q2->where('semester', $semester);
+                });
+            })
+            ->where(function($query) use ($q) {
+                if ($q) {
+                    $query->whereHas('kelas', function ($q2) use ($q) {
+                        $q2->where('nama_kelas', 'like', "%$q%");
+                    })->orWhereHas('tahunAjaran', function ($q3) use ($q) {
+                        $q3->where('tahun', 'like', "%$q%")->orWhere('semester', 'like', "%$q%");
+                    });
+                }
+            })
+            ->limit(20)
+            ->get();
+
+        $results = $kelasAjar->map(function ($ka) {
+            return [
+                'id' => $ka->kelas_ajar_id,
+                'text' => "{$ka->kelas->nama_kelas} - {$ka->tahunAjaran->tahun} {$ka->tahunAjaran->semester} ({$ka->riwayat_kelas_count} Siswa)"
+            ];
+        });
+
+        return response()->json(['results' => $results]);
     }
 }

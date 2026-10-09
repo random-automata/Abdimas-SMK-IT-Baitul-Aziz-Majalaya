@@ -88,6 +88,9 @@
                     @if (session('warning'))
                         <div class="alert alert-warning">{{ session('warning') }}</div>
                     @endif
+                    @if (session('error'))
+                        <div class="alert alert-danger">{{ session('error') }}</div>
+                    @endif
 
                     <div class="table-responsive">
                         <table class="table" id="pc-dt-simple">
@@ -107,6 +110,7 @@
                                     @endrole
                                     <th>Lingkup materi</th>
                                     <th>Tujuan pembelajaran</th>
+                                    <th>Import excel</th>
                                 </tr>
                             </thead>
 
@@ -161,6 +165,16 @@
                                                 class="btn btn-sm btn-light-primary mb-1">Tujuan pembelajaran</a>
                                             <a href="{{ route('assesment-formatif.index', $item->intrakurikuler_id) }}"
                                                 class="btn btn-sm btn-light-primary mb-1">Asesmen Formatif</a>
+                                        </td>
+                                        {{-- new feature --}}
+                                        <td class="d-flex align-items-center gap-2">
+                                            <a href="{{ route('template_tp_lm.template', $item->intrakurikuler_id) }}" class="btn btn-primary">
+                                                <i class="bi bi-download"></i> Unduh Template Excel
+                                            </a>
+                                            <button type="button" class="btn btn-success" data-bs-toggle="modal"
+                                                data-bs-target="#modalImportExcel" data-id="{{ $item->intrakurikuler_id }}">
+                                                <i class="bi bi-save"></i> Masukkan Data Excel
+                                            </button>
                                         </td>
                                     </tr>
                                 @empty
@@ -245,6 +259,55 @@
                             @enderror
                         </div>
 
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+    </div>
+
+    {{-- ===================== MODAL MASUKKAN DATA EXCEL ===================== --}}
+    <div class="modal fade" id="modalImportExcel" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+
+                <form id="excelForm" method="POST" action="{{ route('template_tp_lm.import', $item->intrakurikuler_id) }}" enctype="multipart/form-data">
+                    @csrf
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="excelModalTitle">Masukkan Data Excel</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label d-block">Opsi Import</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="mode" id="mode_tambah" value="tambah" checked>
+                                <label class="form-check-label" for="mode_tambah">Tambah Data</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="mode" id="mode_timpa" value="timpa">
+                                <label class="form-check-label" for="mode_timpa">Timpa Data</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">File Excel</label>
+                            <input type="file" name="excel" id="excel_file"
+                                class="form-control @error('excel') is-invalid @enderror" accept=".xlsx, .xls" required>
+                            @error('excel')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                            @enderror
+                            <div class="form-text text-muted">
+                                Unggah file Excel (.xlsx / .xls) sesuai dengan template yang telah disediakan.
+                            </div>
+                        </div>
                     </div>
 
                     <div class="modal-footer">
@@ -356,6 +419,21 @@
                 setCreateMode();
             @endif
         @endif
+
+        // Modal Masukkan Data Excel
+        const excelModalEl = document.getElementById('modalImportExcel');
+        const excelForm = document.getElementById('excelForm');
+        const importUrlTemplate = {!! json_encode(route('template_tp_lm.import', ['intrakurikuler' => '___ID___'])) !!};
+
+        if (excelModalEl) {
+            excelModalEl.addEventListener('show.bs.modal', function(event) {
+                const btn = event.relatedTarget;
+                const id = btn ? btn.getAttribute('data-id') : '';
+                if (id && excelForm) {
+                    excelForm.action = importUrlTemplate.replace('___ID___', id);
+                }
+            });
+        }
     </script>
 
     <script src="/build/js/plugins/choices.min.js"></script>

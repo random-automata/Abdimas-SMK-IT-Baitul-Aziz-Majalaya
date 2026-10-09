@@ -4,6 +4,8 @@ use App\Http\Controllers\Absensi\AbsensiControllerEkstrakurikuler;
 use App\Http\Controllers\Absensi\AbsensiControllerIntrakurikuler;
 use App\Http\Controllers\Account\AccountController;
 use App\Http\Controllers\Akademik\KelasController;
+use App\Http\Controllers\Akademik\MasterOrangTuaController;
+use App\Http\Controllers\Akademik\MasterSiswaController;
 use App\Http\Controllers\Akademik\StaffController;
 use App\Http\Controllers\Akademik\TahunAjaranController;
 use App\Http\Controllers\Intrakurikuler\AssesmentFormatifController;
@@ -11,6 +13,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dokumen\CetakDokumenController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Ekstrakurikuler\EkstrakurikulerController;
+use App\Http\Controllers\Ekstrakurikuler\EkstrakurikulerExcelController;
 use App\Http\Controllers\Ekstrakurikuler\EkstrakurikulerSiswaController;
 use App\Http\Controllers\Intrakurikuler\IntrakurikulerController;
 use App\Http\Controllers\Ekstrakurikuler\PenilaianEkstrakurikulerController;
@@ -75,6 +78,7 @@ Route::middleware(['auth', 'role:Bagian Akademik'])->prefix('akademik')->name('a
         Route::resource('siswa', SiswaController::class);
         Route::get('ajax/search-siswa', [SiswaController::class, 'ajaxSearchSiswa'])->name('kelas.ajax.search-siswa');
         Route::post('add-existing-siswa', [SiswaController::class, 'addExistingSiswa'])->name('kelas.add-existing-siswa');
+        Route::post('siswa/{siswa}/pindahkan', [SiswaController::class, 'pindahkanSiswa'])->name('kelas.pindahkan-siswa');
 
         Route::get('load-siswa', [SiswaController::class, 'showLoadSiswaForm'])->name('kelas.show-load-siswa');
         Route::post('load-siswa', [SiswaController::class, 'loadSiswaFromKelas'])->name('kelas.load-siswa');
@@ -90,6 +94,12 @@ Route::middleware(['auth', 'role:Bagian Akademik'])->prefix('akademik')->name('a
 
     Route::get('kelas/ajax/kelas/search', [SiswaController::class, 'ajaxSearchKelas'])->name('ajax.kelas.search');
     Route::resource('staff', StaffController::class);
+    
+    Route::get('master-siswa/download-template', [MasterSiswaController::class, 'downloadTemplate'])->name('master-siswa.download-template');
+    Route::post('master-siswa/preview-import', [MasterSiswaController::class, 'previewImport'])->name('master-siswa.preview-import');
+    Route::post('master-siswa/confirm-import', [MasterSiswaController::class, 'confirmImport'])->name('master-siswa.confirm-import');
+    Route::resource('master-siswa', MasterSiswaController::class)->parameters(['master-siswa' => 'siswa']);
+    Route::resource('master-orang-tua', MasterOrangTuaController::class)->parameters(['master-orang-tua' => 'orangTua'])->except(['create', 'store']);
 });
 
 // Define a group of routes with 'auth' middleware applied
@@ -135,6 +145,11 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/assesmen-sumatif/import', [AssesmentSumatifController::class, 'importExcelSumatif'])
                 ->name('assesment_sumatif.import');
 
+            Route::get('template-tp-lm-excel', [ExcelController::class, 'downloadInputTpLmTemplate'])
+                ->name('template_tp_lm.template');
+            Route::post('import-tp-lm', [ExcelController::class, 'importInputTpLm'])
+                ->name('template_tp_lm.import');
+
             Route::get('assesment-formatif/{riwayatKelas}/detail', [AssesmentFormatifController::class, 'detailAssesmentFormatif'])
                 ->name('assesment-formatif.detail');
             Route::post('assesment-formatif/{riwayatKelas}/save-detail', [AssesmentFormatifController::class, 'saveDetail'])
@@ -151,14 +166,27 @@ Route::middleware(['auth'])->group(function () {
             ->name('ekstrakurikuler.manage-siswa.store');
         Route::post('manage-siswa/add-existing', [EkstrakurikulerSiswaController::class, 'addExistingSiswa'])
             ->name('ekstrakurikuler.manage-siswa.add-existing');
+
+        Route::get('manage-siswa/load-siswa', [EkstrakurikulerSiswaController::class, 'showLoadSiswaForm'])
+            ->name('ekstrakurikuler.manage-siswa.show-load-siswa');
+        Route::post('manage-siswa/load-siswa', [EkstrakurikulerSiswaController::class, 'loadSiswaFromKelas'])
+            ->name('ekstrakurikuler.manage-siswa.load-siswa');
+
         Route::resource('manage-siswa', EkstrakurikulerSiswaController::class)
             ->only(['index', 'destroy'])
             ->names('ekstrakurikuler.manage-siswa');
 
         Route::get('ajax/search-siswa', [EkstrakurikulerSiswaController::class, 'ajaxSearchSiswa'])
             ->name('ekstrakurikuler.ajax.search-siswa');
+        Route::get('ajax/kelas/search', [EkstrakurikulerSiswaController::class, 'ajaxSearchKelas'])
+            ->name('ekstrakurikuler.ajax.kelas.search');
 
         Route::resource('penilaian_ekstrakurikuler', PenilaianEkstrakurikulerController::class);
+
+        Route::get('penilaian-template-excel', [EkstrakurikulerExcelController::class, 'downloadTemplate'])
+            ->name('ekstrakurikuler.penilaian.template-excel');
+        Route::post('penilaian-import-excel', [EkstrakurikulerExcelController::class, 'importExcel'])
+            ->name('ekstrakurikuler.penilaian.import-excel');
     })->middleware('role:Guru Mapel|Bagian Akademik');
 
 

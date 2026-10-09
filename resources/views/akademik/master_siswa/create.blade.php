@@ -54,7 +54,7 @@
 @endsection
 
 @section('content')
-    <x-breadcrumb item="Manajemen Siswa" link="{{ route('akademik.kelas.siswa.index', $kelas_ajar->kelas_ajar_id) }}" active="Tambah Siswa" />
+    <x-breadcrumb item="Manajemen Siswa" active="Tambah Siswa" subItem="Data Siswa" subLink="{{ route('akademik.master-siswa.index') }}" />
 
     <div class="row">
         <div class="col-12">
@@ -71,7 +71,7 @@
                     @if (session('error'))
                         <div class="alert alert-danger">{{ session('error') }}</div>
                     @endif
-                    <form action="{{ route('akademik.siswa.store', $kelas_ajar->kelas_ajar_id) }}" method="POST">
+                    <form action="{{ route('akademik.master-siswa.store') }}" method="POST">
                         @csrf
 
                         <h6 class="mb-3">Akun Login</h6>
@@ -346,7 +346,7 @@
 
                         <div class="d-flex gap-2 mt-3">
                             <button class="btn btn-success">Simpan</button>
-                            <a href="{{ route('akademik.siswa.index', $kelas_ajar->kelas_ajar_id) }}"
+                            <a href="{{ route('akademik.master-siswa.index') }}"
                                 class="btn btn-light">Batal</a>
                         </div>
                     </form>

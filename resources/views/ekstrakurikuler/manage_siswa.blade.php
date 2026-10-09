@@ -1,4 +1,4 @@
-@extends('layouts.master')
+﻿@extends('layouts.master')
 
 @section('title', 'Manage Siswa Ekstrakurikuler')
 
@@ -54,20 +54,20 @@
 @endsection
 
 @section('content')
-    <x-breadcrumb item="Ekstrakurikuler" link="{{ route('ekstrakurikuler.index') }}" active="Manage Siswa" />
+    <x-breadcrumb item="Ekstrakurikuler" subItem="Ekstrakurikuler" subLink="{{ route('ekstrakurikuler.index') }}" active="Kelola Siswa" />
 
     <div class="card">
         <div class="card-header d-flex justify-content-between">
             <h5>Kelola Siswa Ekstrakurikuler: {{ $ekskul->nama_pelajaran }} ({{ $ekskul->tahunAjaran->tahun }}
                 {{ $ekskul->tahunAjaran->semester }})</h5>
             <div>
-                <button type="button" class="btn btn-info mb-3" data-bs-toggle="modal" data-bs-target="#modalLoadSiswa">
-                    Load Siswa
-                </button>
-                <a href="{{ route('ekstrakurikuler.manage-siswa.create', $ekskul->ekstrakurikuler_id) }}"
-                    class="btn btn-success mb-3 ms-2">
-                    Tambah Siswa Baru
+                <a href="{{ route('ekstrakurikuler.manage-siswa.show-load-siswa', $ekskul->ekstrakurikuler_id) }}"
+                    class="btn btn-info mb-3">
+                    Load Siswa dari Kelas Lain
                 </a>
+                <button type="button" class="btn btn-primary mb-3 ms-2" data-bs-toggle="modal" data-bs-target="#modalLoadSiswa">
+                    <i class="bi bi-plus-lg"></i> Tambah Siswa
+                </button>
             </div>
         </div>
         <div class="card-body">
@@ -88,7 +88,7 @@
                                 <th>Nama Siswa</th>
                                 <th>NIS</th>
                                 <th>Kelas Terakhir</th>
-                                <th>Action</th>
+                                <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>

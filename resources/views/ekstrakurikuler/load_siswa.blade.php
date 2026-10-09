@@ -55,16 +55,16 @@
 @endsection
 
 @section('content')
-    <x-breadcrumb item="Manajemen Kelas" subItem="Manajemen Kelas" subLink="{{ route('akademik.kelas.index') }}" sub2Item="Kelola Siswa" sub2Link="{{ route('akademik.siswa.index', $kelasTujuan->kelas_ajar_id) }}" active="Ambil Data Siswa" />
+    <x-breadcrumb item="Ekstrakurikuler" subItem="Ekstrakurikuler" subLink="{{ route('ekstrakurikuler.index') }}" sub2Item="Kelola Siswa" sub2Link="{{ route('ekstrakurikuler.manage-siswa.index', $ekskul->ekstrakurikuler_id) }}" active="Ambil Data Siswa" />
 
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div>
-                <h5>Load Siswa ke {{ $kelasTujuan->kelas->nama_kelas }} ({{ $kelasTujuan->tahunAjaran->tahun }}
-                    {{ $kelasTujuan->tahunAjaran->semester }})</h5>
+                <h5>Load Siswa ke Ekstrakurikuler {{ $ekskul->nama_pelajaran }} ({{ $ekskul->tahunAjaran->tahun }}
+                    {{ $ekskul->tahunAjaran->semester }})</h5>
             </div>
             <div>
-                <a href="{{ route('akademik.siswa.index', $kelasTujuan->kelas_ajar_id) }}" class="btn btn-secondary">Kembali</a>
+                <a href="{{ route('ekstrakurikuler.manage-siswa.index', $ekskul->ekstrakurikuler_id) }}" class="btn btn-secondary">Kembali</a>
             </div>
         </div>
         <div class="card-body">
@@ -76,6 +76,7 @@
                     {{ $message }}
                 </div>
             @enderror
+
             <form method="GET" action="">
                 <div class="form-check mb-2">
                     <input class="form-check-input check-filter" type="checkbox" id="showOtherSemester" name="show_other_semester" value="true" {{ request('show_other_semester') == 'true' ? 'checked' : '' }}>
@@ -102,7 +103,7 @@
                     {{ $kelasAsal->kelas->nama_kelas ?? '-' }}
                     ({{ $kelasAsal->tahunAjaran->tahun ?? '-' }} {{ $kelasAsal->tahunAjaran->semester ?? '-' }})
                 </div>
-                <form method="POST" action="{{ route('akademik.kelas.load-siswa', $kelasTujuan->kelas_ajar_id) }}">
+                <form method="POST" action="{{ route('ekstrakurikuler.manage-siswa.load-siswa', $ekskul->ekstrakurikuler_id) }}">
                     @csrf
                     <input type="hidden" name="kelas_asal_id" value="{{ $kelasAsalId }}">
                     <div class="table-responsive mt-4">
@@ -137,7 +138,7 @@
                     <button type="submit" class="btn btn-success mt-2">Load Siswa Terpilih</button>
                 </form>
             @elseif($kelasAsalId)
-                <div class="alert alert-warning mt-4">Tidak ada siswa di kelas asal yang dipilih.</div>
+                <div class="alert alert-warning mt-4">Tidak ada siswa di kelas asal yang dipilih atau semua siswa sudah terdaftar di ekstrakurikuler ini.</div>
             @endif
         </div>
     </div>
@@ -165,7 +166,7 @@
                     const showOtherSemester = document.getElementById('showOtherSemester').checked;
                     const showOtherTahun = document.getElementById('showOtherTahun').checked;
                     if (!q || q.length < 2) return;
-                    fetch("{{ route('akademik.ajax.kelas.search') }}?kelas_ajar_id={{ $kelasTujuan->kelas_ajar_id }}&show_other_semester=" + showOtherSemester + "&show_other_tahun=" + showOtherTahun + "&q=" + encodeURIComponent(q))
+                    fetch("{{ route('ekstrakurikuler.ajax.kelas.search', $ekskul->ekstrakurikuler_id) }}?show_other_semester=" + showOtherSemester + "&show_other_tahun=" + showOtherTahun + "&q=" + encodeURIComponent(q))
                         .then(res => res.json())
                         .then(data => {
                             instance.setChoices(data.results, 'id', 'text', true);
